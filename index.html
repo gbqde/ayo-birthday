@@ -12,13 +12,14 @@
         }
 
         body {
-            font-family: Arial, sans-serif;
-            background: #f0f0f0;
+            font-family: 'Georgia', serif;
+            background: #f4e4bc;
             height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             overflow: hidden;
+            perspective: 1000px;
         }
 
         .book-container {
@@ -26,37 +27,65 @@
             height: 100vh;
             position: relative;
             overflow: hidden;
-            background: white;
+            background: #fff;
             max-width: 500px;
             margin: auto;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            background-image: 
+                linear-gradient(to right, #f9f6f1 0%, #fff 3%, #fff 97%, #f9f6f1 100%);
+            transform-style: preserve-3d;
         }
 
         .page {
             position: absolute;
             width: 100%;
             height: 100%;
-            transition: transform 0.5s ease-in-out;
+            transition: transform 0.6s cubic-bezier(0.645, 0.045, 0.355, 1);
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px;
-            background: white;
+            background: inherit;
+            backface-visibility: hidden;
+            transform-origin: left center;
+            transform-style: preserve-3d;
         }
 
-        .page img {
-            max-width: 100%;
-            max-height: 70vh;
-            object-fit: contain;
-            margin-bottom: 20px;
+        .page.flipping {
+            z-index: 2;
+        }
+
+        .page.flipping-reverse {
+            z-index: 2;
+        }
+
+        /* Style for image pages */
+        .page.image-page img {
+            width: 90%;
+            height: 85vh;
+            object-fit: cover;
             border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin: 20px auto;
+        }
+
+        /* Style for text pages */
+        .page.text-page {
+            padding: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .page-text {
             text-align: center;
-            padding: 15px;
-            font-size: 18px;
-            color: #333;
+            padding: 20px;
+            font-size: 20px;
+            color: #2c1810;
+            line-height: 1.6;
+            max-width: 80%;
+            margin: 0 auto;
         }
 
         .nav-buttons {
@@ -71,21 +100,34 @@
         }
 
         .nav-button {
-            background: rgba(0,0,0,0.5);
+            background: rgba(44, 24, 16, 0.7);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 20px;
+            padding: 12px 24px;
+            border-radius: 25px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 18px;
             transition: background 0.3s;
+            font-family: 'Georgia', serif;
         }
 
         .nav-button:hover {
-            background: rgba(0,0,0,0.7);
+            background: rgba(44, 24, 16, 0.9);
         }
 
-        /* Page indicators */
+        .page-shadow {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 30px;
+            background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+            transform-origin: right center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.6s;
+        }
+
         .page-indicator {
             position: fixed;
             bottom: 70px;
@@ -101,31 +143,37 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: rgba(0,0,0,0.2);
+            background: rgba(44, 24, 16, 0.2);
         }
 
         .dot.active {
-            background: rgba(0,0,0,0.6);
+            background: rgba(44, 24, 16, 0.6);
         }
     </style>
 </head>
 <body>
     <div class="book-container">
         <!-- Cover Page -->
-        <div class="page" style="transform: translateX(0%)">
-            <img src="/api/placeholder/400/320" alt="Cover Photo">
+        <div class="page image-page" style="transform: translateX(0%)">
+            <img src="/api/placeholder/900/1600" alt="Cover Photo">
             <div class="page-text">
                 <h1>For My Love ❤️</h1>
                 <p>Happy Birthday!</p>
             </div>
+            <div class="page-shadow"></div>
         </div>
 
-        <!-- Add more pages following this template -->
-        <div class="page" style="transform: translateX(100%)">
-            <img src="/api/placeholder/400/320" alt="Page 1 Photo">
+        <!-- Example of alternating image and text pages -->
+        <div class="page text-page" style="transform: translateX(100%)">
             <div class="page-text">
                 <p>Your message here</p>
             </div>
+            <div class="page-shadow"></div>
+        </div>
+
+        <div class="page image-page" style="transform: translateX(200%)">
+            <img src="/api/placeholder/900/1600" alt="Memory Photo">
+            <div class="page-shadow"></div>
         </div>
 
         <!-- Add more pages as needed -->
@@ -146,6 +194,7 @@
         const container = document.querySelector('.book-container');
         let startX = 0;
         let currentX = 0;
+        let isAnimating = false;
 
         // Initialize page indicators
         const indicator = document.querySelector('.page-indicator');
@@ -156,11 +205,44 @@
             indicator.appendChild(dot);
         }
 
-        function updatePages() {
-            pages.forEach((page, index) => {
-                page.style.transform = `translateX(${(index - currentPage) * 100}%)`;
-            });
-            
+        function updatePages(direction) {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            const currentPageElement = pages[currentPage];
+            const nextPageElement = direction === 'next' ? 
+                pages[currentPage + 1] : pages[currentPage - 1];
+
+            if (nextPageElement) {
+                currentPageElement.classList.add(direction === 'next' ? 'flipping' : 'flipping-reverse');
+                
+                // Set initial positions
+                if (direction === 'next') {
+                    currentPageElement.style.transform = 'rotateY(0deg)';
+                    nextPageElement.style.transform = 'translateX(100%)';
+                } else {
+                    currentPageElement.style.transform = 'rotateY(0deg)';
+                    nextPageElement.style.transform = 'translateX(-100%)';
+                }
+
+                // Trigger animation
+                requestAnimationFrame(() => {
+                    if (direction === 'next') {
+                        currentPageElement.style.transform = 'rotateY(-180deg)';
+                        nextPageElement.style.transform = 'translateX(0%)';
+                    } else {
+                        currentPageElement.style.transform = 'rotateY(180deg)';
+                        nextPageElement.style.transform = 'translateX(0%)';
+                    }
+
+                    // Update page number after animation
+                    setTimeout(() => {
+                        currentPageElement.classList.remove('flipping', 'flipping-reverse');
+                        isAnimating = false;
+                    }, 600);
+                });
+            }
+
             // Update indicators
             document.querySelectorAll('.dot').forEach((dot, index) => {
                 dot.classList.toggle('active', index === currentPage);
@@ -170,42 +252,60 @@
         function nextPage() {
             if (currentPage < pages.length - 1) {
                 currentPage++;
-                updatePages();
+                updatePages('next');
             }
         }
 
         function previousPage() {
             if (currentPage > 0) {
                 currentPage--;
-                updatePages();
+                updatePages('previous');
             }
         }
 
         // Touch events for swipe
+        let touchStartTime;
+        let touchEndTime;
+
         container.addEventListener('touchstart', (e) => {
             startX = e.touches[0].clientX;
             currentX = startX;
+            touchStartTime = new Date().getTime();
         });
 
         container.addEventListener('touchmove', (e) => {
+            if (isAnimating) return;
+            
             currentX = e.touches[0].clientX;
             const diff = currentX - startX;
+            const currentPage = pages[currentPage];
+            const nextPage = diff < 0 ? pages[currentPage + 1] : pages[currentPage - 1];
             
-            pages.forEach((page, index) => {
-                const baseTransform = (index - currentPage) * 100;
-                page.style.transform = `translateX(${baseTransform + (diff / container.offsetWidth) * 100}%)`;
-            });
+            if (nextPage) {
+                const rotation = (diff / container.offsetWidth) * 180;
+                if (diff < 0) {
+                    currentPage.style.transform = `rotateY(${rotation}deg)`;
+                    nextPage.style.transform = `translateX(${100 + (diff/container.offsetWidth) * 100}%)`;
+                } else {
+                    currentPage.style.transform = `rotateY(${rotation}deg)`;
+                    nextPage.style.transform = `translateX(${-100 + (diff/container.offsetWidth) * 100}%)`;
+                }
+            }
         });
 
         container.addEventListener('touchend', (e) => {
+            touchEndTime = new Date().getTime();
+            const swipeTime = touchEndTime - touchStartTime;
             const diff = currentX - startX;
-            if (Math.abs(diff) > 50) { // Minimum swipe distance
-                if (diff > 0 && currentPage > 0) {
-                    previousPage();
-                } else if (diff < 0 && currentPage < pages.length - 1) {
+            const swipeSpeed = Math.abs(diff) / swipeTime;
+
+            if (Math.abs(diff) > 50 || swipeSpeed > 0.5) { // Minimum swipe distance or speed
+                if (diff < 0 && currentPage < pages.length - 1) {
                     nextPage();
+                } else if (diff > 0 && currentPage > 0) {
+                    previousPage();
                 } else {
-                    updatePages(); // Reset position if swipe wasn't far enough
+                    updatePages(); // Reset position
                 }
             } else {
                 updatePages(); // Reset position if swipe wasn't far enough
